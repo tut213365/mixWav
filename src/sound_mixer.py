@@ -7,9 +7,6 @@ from pathlib import Path
 
 
 class TwoSoundSuperimposition:
-    def __init__(self):
-        pass
-
     @staticmethod
     def cal_amp(wf):
         """
@@ -36,6 +33,7 @@ class TwoSoundSuperimposition:
         noise_rms = clean_rms / (10**a)
         return noise_rms
 
+    @classmethod
     def superimposition(
         self, sound1_file: str, sound2_file: str, snr: float, dist_dir: str
     ) -> Tuple[str, str, str]:
@@ -47,6 +45,7 @@ class TwoSoundSuperimposition:
             sound2_file(str): 重畳する2つ目の音声
             snr(float): Speech Noise Ratio
         Return:
+            str: 重畳音声のID
             str: 重畳済みの音声ファイル
             str: 重畳前のsound1
             str: 重畳前のsound2
@@ -102,8 +101,8 @@ class TwoSoundSuperimposition:
         adjusted_sound2_data = np.asarray(adjusted_sound2_data.astype(np.int16))
         mix_data = np.asarray(mix_data.astype(np.int16))
 
-        sound1_name = Path(sound1_file).name.split(".")[0]
-        sound2_name = Path(sound2_file).name.split(".")[0]
+        sound1_name = Path(sound1_file).name.replace(".wav", "")
+        sound2_name = Path(sound2_file).name.replace(".wav", "")
 
         # distファイルの存在チェック
         if not Path(dist_dir).exists():
@@ -125,15 +124,15 @@ class TwoSoundSuperimposition:
         mix_path = Path(dist_dir) / "mix" / f"{sound1_name}_{sound2_name}.wav"
         write(mix_path, mix_rate, mix_data)
 
-        return mix_path, sound1_path, sound2_path
+        mix_id = f"{sound1_name}_{sound2_name}"
+        return mix_id, mix_path, sound1_path, sound2_path
 
 
 # test code
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, filename="sound_mixer_debug.log")
-    superimposition = TwoSoundSuperimposition()
     sound1 = "sample_data/sound1.wav"
     sound2 = "sample_data/sound2.wav"
     snr = 0.0
     dist = "sample_data/result"
-    superimposition.superimposition(sound1, sound2, snr, dist)
+    TwoSoundSuperimposition.superimposition(sound1, sound2, snr, dist)
