@@ -1,9 +1,11 @@
+from copyreg import remove_extension
 import logging
 import numpy as np
-import wave
 from typing import Tuple
 from scipy.io.wavfile import write
 from pathlib import Path
+import os
+import soundfile as sf
 
 
 class TwoSoundSuperimposition:
@@ -33,9 +35,18 @@ class TwoSoundSuperimposition:
         noise_rms = clean_rms / (10**a)
         return noise_rms
 
+    @staticmethod
+    def remove_extension(path:str)->str:
+        """
+        get path string removed file extension
+        """
+        target="."
+        idx = path.rfind(target)
+        return path[:idx]  # スライスで半角空白文字よりも前を抽出
+
     @classmethod
     def superimposition(
-        self, sound1_file: str, sound2_file: str, snr: float, dist_dir: str
+        self, sound1_file: str, sound2_file: str, snr: float, dist_dir: str, write_ref:bool = False,filename:str=""
     ) -> Tuple[str, str, str]:
         """
         snrの値で2音声を重畳する
@@ -51,25 +62,34 @@ class TwoSoundSuperimposition:
             str: 重畳前のsound2
         """
 
+        # wav限定の処理
+        """
         # sound 1
         with wave.open(sound1_file, "r") as f:
             sound1_data = self.cal_amp(f)
             if sound1_data.ndim == 2:
                 sound1_data = sound1_data[0]
             sound1_rate = f.getframerate()
-        # sound 1
+        
+        # sound 2
         with wave.open(sound2_file, "r") as f:
             sound2_data = self.cal_amp(f)
             if sound2_data.ndim == 2:
                 sound2_data = sound2_data[0]
             sound2_rate = f.getframerate()
+        """
+        sound1_data, sound1_rate = sf.read(sound1_file)
+        sound2_data, sound2_rate = sf.read(sound2_file)
 
         sound1_rms = self.cal_rms(sound1_data)
         sound2_rms = self.cal_rms(sound2_data)
 
         # SNRに対応したRMSを求める
-        adjusted_sound2_rms = self.cal_adjusted_rms(sound1_rms, snr)
-        adjusted_sound2_data = sound2_data * (adjusted_sound2_rms / sound2_rms)
+        if sound2_rms!=0:
+            adjusted_sound2_rms = self.cal_adjusted_rms(sound1_rms, snr)
+            adjusted_sound2_data = sound2_data * (adjusted_sound2_rms / sound2_rms)
+        else:
+            adjusted_sound2_data = sound2_data
         adjusted_sound2_data = adjusted_sound2_data.astype(np.float64)
 
         # 長さ調整(0 padding)
@@ -89,6 +109,8 @@ class TwoSoundSuperimposition:
             return
         mix_rate = sound1_rate
 
+        # waveパッケージ特有の処理
+        """
         # 正規化 (wavが16bitなので、符号をどけた2^15 ~ -2^15の値に正規化)
         max_value = np.abs(mix_data).max()
         if max_value > 32767:
@@ -100,39 +122,56 @@ class TwoSoundSuperimposition:
         sound1_data = np.asarray(sound1_data.astype(np.int16))
         adjusted_sound2_data = np.asarray(adjusted_sound2_data.astype(np.int16))
         mix_data = np.asarray(mix_data.astype(np.int16))
+        """
 
-        sound1_name = Path(sound1_file).name.replace(".wav", "")
-        sound2_name = Path(sound2_file).name.replace(".wav", "")
+        #mixed_soundの名前生成のために，ファイル名から拡張子を除いたものを取得
+        sound1_name = self.remove_extension(Path(sound1_file).name)
+        sound2_name = self.remove_extension(Path(sound2_file).name)
+        
 
         # distファイルの存在チェック
         if not Path(dist_dir).exists():
-            Path(dist_dir).mkdir(exist_ok=True)
-        if not (Path(dist_dir) / "sound1").exists():
-            (Path(dist_dir) / "sound1").mkdir(exist_ok=True)
-        if not (Path(dist_dir) / "sound2").exists():
-            (Path(dist_dir) / "sound2").mkdir(exist_ok=True)
-        if not (Path(dist_dir) / "mix").exists():
-            (Path(dist_dir) / "mix").mkdir(exist_ok=True)
+            os.makedirs( Path(dist_dir),exist_ok=True)
+        if (write_ref):
+            if not (Path(dist_dir) / "sound1").exists():
+                os.makedirs((Path(dist_dir) / "sound1"),exist_ok=True)
+            if not (Path(dist_dir) / "sound2").exists():
+                os.makedirs((Path(dist_dir) / "sound2"),exist_ok=True)
+            if not (Path(dist_dir) / "mix").exists():
+                os.makedirs((Path(dist_dir) / "mix"),exist_ok=True)
 
         # write sound1 and sound2
-        sound1_path = Path(dist_dir) / "sound1" / f"{sound1_name}.wav"
-        sound2_path = Path(dist_dir) / "sound2" / f"{sound2_name}.wav"
-        write(sound1_path, sound1_rate, sound1_data)
-        write(sound2_path, sound2_rate, adjusted_sound2_data)
+        if (write_ref):
+            sound1_path = Path(dist_dir) / "sound1" / f"{sound1_name}.wav"
+            sound2_path = Path(dist_dir) / "sound2" / f"{sound2_name}.wav"
+            sf.write(str(sound1_path), sound1_data, sound1_rate)
+            sf.write(str(sound2_path), adjusted_sound2_data, sound2_rate)
 
+        if filename == "":
+            mixname=f"{sound1_name}_{sound2_name}.wav"
+        else:
+            mixname=filename
+
+        
         # write mix sound
-        mix_path = Path(dist_dir) / "mix" / f"{sound1_name}_{sound2_name}.wav"
-        write(mix_path, mix_rate, mix_data)
+        if (write_ref):
+            mix_path = Path(dist_dir) / "mix" / mixname
+        else:
+            mix_path = Path(dist_dir)/ mixname
+        # write(mix_path, mix_rate, mix_data)
+        sf.write(str(mix_path),mix_data,mix_rate)
 
         mix_id = f"{sound1_name}_{sound2_name}"
-        return mix_id, mix_path, sound1_path, sound2_path
+        #return mix_id, mix_path, sound1_path, sound2_path
+        return mix_id, mix_path, sound1_file, sound2_file
 
 
 # test code
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, filename="sound_mixer_debug.log")
-    sound1 = "sample_data/sound1.wav"
+    # sound1 = "sample_data/sound1.wav"
     sound2 = "sample_data/sound2.wav"
+    sound1="/mnt/data1/matsumoto/dump_wav2vec2_2/raw/eval2/data/format.17/A02M0012_0472185_0480985.flac"
     snr = 0.0
     dist = "sample_data/result"
     TwoSoundSuperimposition.superimposition(sound1, sound2, snr, dist)
