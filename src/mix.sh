@@ -1,7 +1,8 @@
 . ~/wav2vec2_exp/espnet/tools/activate_python.sh
 
 # ref_path=/home/katsuaki/WAV
-ref_path=/mnt/data1/matsumoto/dump_wav2vec2_2/raw
+# ref_path=/mnt/data1/matsumoto/dump_wav2vec2_2/raw
+ref_path=/home/katsuaki/WAV
 noise_path=/mnt/data1/dataset/CHiME-3/CHiME3/data/audio/16kHz/backgrounds
 dest_path=/home/katsuaki/MIXED_WAV
 # dest_path=/home/katsuaki/mix_two_sound/sample_data/result

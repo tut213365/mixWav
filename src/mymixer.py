@@ -53,11 +53,11 @@ def sound_extract(sound_path,dest_path,length,location:float=0.0):
     sound_data, sound_rate = sf.read(sound_path)
     sound_len=len(sound_data)
 
-    """
+    
     # 1/5の確率でノイズのないデータを作る
     if random.random()<0.2:
         sound_data*=0
-    """
+    
 
     if debug:
         print(sound_data[:10])
@@ -142,11 +142,16 @@ def main():
         dest_path=dest_dir+child_path
 
         #重畳ノイズ生成
+        # refの長さを取り出す
+        ref_data, ref_rate = sf.read(ref_path)
+        ref_length=len(ref_data)
+        #fairseqで弾かれるので2秒以下はそもそも処理しない
+        if ref_length/ref_rate <2:
+            continue
+
         noise_path=noise_pathes[random.randint(0,noise_pathes_len-1)]# noiseをランダム抽出
         if debug:
             print(noise_path)
-        ref_data, ref_rate = sf.read(ref_path)
-        ref_length=len(ref_data)
         sound_extract(noise_path,TEMP_PATH,ref_length,random.random()) # TEMP_PATHにrefと長さが同じnoiseを生成
 
         snr=max_snr*random.uniform(min_snr,max_snr)# snrを設定
